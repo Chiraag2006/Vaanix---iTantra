@@ -1,0 +1,11 @@
+numpy
+scipy
+sounddevice
+torch
+faster-whisper
+silero-vad
+msgpack
+reedsolo
+crcmod
+mathplotlib
+streamlit
