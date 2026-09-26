@@ -4,10 +4,6 @@ from communication.semantic_transport import transmit_semantic_packet
 
 
 def _hindi_object(object_name):
-    """
-    Convert semantic object labels into Hindi.
-    """
-
     translations = {
         "MEDICINE": "दवाई",
         "WATER": "पानी",
@@ -19,91 +15,113 @@ def _hindi_object(object_name):
 
     return translations.get(
         object_name,
-        object_name
+        object_name,
     )
 
 
 def semantic_decode(packet: SemanticPacket):
-    """
-    Convert the recovered semantic packet
-    into natural language.
 
-    Supports English and Hindi.
-    """
+    # -------------------------------------------------
+    # FREE / GENERAL MESSAGE
+    # -------------------------------------------------
 
-    # -------------------------
-    # HINDI
-    # -------------------------
+    # If the original message was preserved,
+    # return it instead of inventing a new sentence.
+    if packet.message:
+        return packet.message
+
+    # -------------------------------------------------
+    # STRUCTURED HINDI MESSAGE
+    # -------------------------------------------------
 
     if packet.language == "hi":
 
         sector = packet.location.replace(
             "SECTOR_",
-            ""
+            "",
+        )
+
+        object_name = _hindi_object(
+            packet.object
         )
 
         if packet.intent == "SUPPLY_REQUEST":
-            return (
-                f"सेक्टर {sector} में "
-                f"{_hindi_object(packet.object)} भेजें।"
-            )
+
+            if packet.location != "UNKNOWN":
+                return (
+                    f"सेक्टर {sector} में "
+                    f"{object_name} भेजें।"
+                )
+
+            return f"{object_name} भेजें।"
 
         if packet.intent == "ALERT":
-            return (
-                f"सेक्टर {sector} में "
-                f"{_hindi_object(packet.object)} "
-                f"के लिए चेतावनी।"
-            )
+
+            if packet.location != "UNKNOWN":
+                return (
+                    f"सेक्टर {sector} में "
+                    f"{object_name} के लिए चेतावनी।"
+                )
+
+            return f"{object_name} के लिए चेतावनी।"
 
         return (
-            f"सेक्टर {sector} में "
-            f"{_hindi_object(packet.object)}।"
+            f"{packet.intent.replace('_', ' ').title()}: "
+            f"{object_name}"
         )
 
-    # -------------------------
-    # ENGLISH
-    # -------------------------
+    # -------------------------------------------------
+    # STRUCTURED ENGLISH MESSAGE
+    # -------------------------------------------------
 
     if packet.intent == "SUPPLY_REQUEST":
-        return (
-            f"Send {packet.object.lower()} "
-            f"to {packet.location.replace('_', ' ').lower()}."
-        )
+
+        object_name = packet.object.lower()
+
+        if packet.location != "UNKNOWN":
+            location = (
+                packet.location
+                .replace("_", " ")
+                .lower()
+            )
+
+            return (
+                f"Send {object_name} "
+                f"to {location}."
+            )
+
+        return f"Send {object_name}."
 
     if packet.intent == "ALERT":
-        return (
-            f"Alert: {packet.object.lower()} "
-            f"at {packet.location.replace('_', ' ').lower()}."
-        )
+
+        object_name = packet.object.lower()
+
+        if packet.location != "UNKNOWN":
+            location = (
+                packet.location
+                .replace("_", " ")
+                .lower()
+            )
+
+            return (
+                f"Alert: {object_name} "
+                f"at {location}."
+            )
+
+        return f"Alert: {object_name}."
 
     return (
         f"{packet.intent.replace('_', ' ').title()}: "
-        f"{packet.object.lower()} "
-        f"at {packet.location.replace('_', ' ').lower()}."
+        f"{packet.object.lower()}"
     )
 
 
 def receiver(packet: SemanticPacket):
-    """
-    Transmit a semantic packet through the complete
-    communication chain and reconstruct speech.
-
-    English and Hindi use different TTS voices
-    based on packet.language.
-    """
-
-    # -------------------------
-    # TRANSMISSION
-    # -------------------------
 
     result = transmit_semantic_packet(
         packet,
-        snr_db=10
+        snr_db=10,
     )
-
-    # -------------------------
-    # TRANSMISSION FAILURE
-    # -------------------------
 
     if not result["success"]:
 
@@ -112,15 +130,7 @@ def receiver(packet: SemanticPacket):
 
         return None, None, result
 
-    # -------------------------
-    # RECOVERED PACKET
-    # -------------------------
-
     recovered_packet = result["packet"]
-
-    # -------------------------
-    # SEMANTIC DECODING
-    # -------------------------
 
     text = semantic_decode(
         recovered_packet
@@ -134,13 +144,9 @@ def receiver(packet: SemanticPacket):
         f"{recovered_packet.language}"
     )
 
-    # -------------------------
-    # LANGUAGE-AWARE TTS
-    # -------------------------
-
     audio_file = text_to_speech(
         text,
-        language=recovered_packet.language
+        language=recovered_packet.language,
     )
 
     return text, audio_file, result
@@ -148,17 +154,14 @@ def receiver(packet: SemanticPacket):
 
 if __name__ == "__main__":
 
-    # -------------------------
-    # ENGLISH TEST PACKET
-    # -------------------------
-
     english_packet = SemanticPacket(
         version=1,
         language="en",
         intent="SUPPLY_REQUEST",
         object="MEDICINE",
         location="SECTOR_4",
-        priority="HIGH"
+        priority="HIGH",
+        message="",
     )
 
     print("=" * 60)
@@ -172,23 +175,15 @@ if __name__ == "__main__":
     if result["success"]:
 
         print(
-            f"Recovered English text: "
-            f"{text}"
+            f"Recovered English text: {text}"
         )
 
         print(
-            f"Audio generated: "
-            f"{audio}"
+            f"Audio generated: {audio}"
         )
 
-        print(
-            "CRC: VALID"
-        )
+        print("CRC: VALID")
 
-
-    # -------------------------
-    # HINDI TEST PACKET
-    # -------------------------
 
     hindi_packet = SemanticPacket(
         version=1,
@@ -196,7 +191,8 @@ if __name__ == "__main__":
         intent="SUPPLY_REQUEST",
         object="WATER",
         location="SECTOR_7",
-        priority="HIGH"
+        priority="HIGH",
+        message="",
     )
 
     print()
@@ -211,15 +207,11 @@ if __name__ == "__main__":
     if result["success"]:
 
         print(
-            f"Recovered Hindi text: "
-            f"{text}"
+            f"Recovered Hindi text: {text}"
         )
 
         print(
-            f"Audio generated: "
-            f"{audio}"
+            f"Audio generated: {audio}"
         )
 
-        print(
-            "CRC: VALID"
-        )
+        print("CRC: VALID")

@@ -17,15 +17,20 @@ from integration.pipeline import semantic_decode
 from tts.tts_engine import text_to_speech
 
 
-# =========================================================
-# PAGE CONFIG
-# =========================================================
+# ---------------------------------------------------------
+# PAGE CONFIGURATION
+# ---------------------------------------------------------
 
 st.set_page_config(
     page_title="TANTRA",
     page_icon="📡",
-    layout="wide"
+    layout="wide",
 )
+
+
+# ---------------------------------------------------------
+# HEADER
+# ---------------------------------------------------------
 
 st.title("📡 TANTRA")
 st.subheader("Semantic Voice Communication System")
@@ -36,9 +41,9 @@ st.caption(
 st.divider()
 
 
-# =========================================================
+# ---------------------------------------------------------
 # SESSION STATE
-# =========================================================
+# ---------------------------------------------------------
 
 if "audio_bytes" not in st.session_state:
     st.session_state.audio_bytes = None
@@ -74,15 +79,14 @@ if "processing_time" not in st.session_state:
     st.session_state.processing_time = None
 
 
-# =========================================================
+# ---------------------------------------------------------
 # VOICE INPUT
-# =========================================================
+# ---------------------------------------------------------
 
 st.header("🎤 Voice Input")
 
 st.write(
-    "Press the microphone button, speak your message, "
-    "then stop recording."
+    "Press the microphone button, speak your message, then stop recording."
 )
 
 recorded_audio = mic_recorder(
@@ -95,20 +99,21 @@ recorded_audio = mic_recorder(
 )
 
 
-# =========================================================
-# SAVE NEW RECORDING TO SESSION STATE
-# =========================================================
+# ---------------------------------------------------------
+# PROCESS NEW RECORDING
+# ---------------------------------------------------------
 
 if recorded_audio is not None:
 
     new_audio = recorded_audio["bytes"]
 
-    # Only process when a new recording is received.
+    # Only process when a genuinely new recording is received
     if new_audio != st.session_state.audio_bytes:
 
+        # Save audio
         st.session_state.audio_bytes = new_audio
 
-        # Reset results belonging to the previous recording.
+        # Reset previous results
         st.session_state.transcript = ""
         st.session_state.language_code = None
         st.session_state.language_name = None
@@ -120,36 +125,46 @@ if recorded_audio is not None:
         st.session_state.audio_file = None
         st.session_state.processing_time = None
 
-        # Save microphone recording.
         input_audio = PROJECT_ROOT / "input_voice.wav"
 
         with open(input_audio, "wb") as f:
             f.write(new_audio)
 
         # -------------------------------------------------
-        # STT
+        # SPEECH TO TEXT
         # -------------------------------------------------
 
         with st.spinner("🎧 Converting speech to text..."):
 
-            stt_result = speech_to_text(str(input_audio))
+            stt_result = speech_to_text(
+                str(input_audio)
+            )
 
         transcript = stt_result["text"]
         detected_language = stt_result["language"]
 
+        # -------------------------------------------------
+        # LANGUAGE DETECTION
+        # -------------------------------------------------
+
         if detected_language.startswith("hi"):
+
             language_code = "hi"
             language_name = "Hindi"
+
         else:
+
             language_code = "en"
             language_name = "English"
 
+        # Store STT results
         st.session_state.transcript = transcript
         st.session_state.language_code = language_code
         st.session_state.language_name = language_name
         st.session_state.language_probability = (
             stt_result["language_probability"]
         )
+
         st.session_state.stt_done = True
 
         # -------------------------------------------------
@@ -157,14 +172,16 @@ if recorded_audio is not None:
         # -------------------------------------------------
 
         packet = encode_message(transcript)
+
+        # Use STT-detected language
         packet.language = language_code
 
         st.session_state.packet = packet
 
 
-# =========================================================
-# SHOW STT RESULT
-# =========================================================
+# ---------------------------------------------------------
+# SPEECH RECOGNITION DISPLAY
+# ---------------------------------------------------------
 
 if st.session_state.stt_done:
 
@@ -175,13 +192,13 @@ if st.session_state.stt_done:
     with col1:
         st.metric(
             "Detected Language",
-            st.session_state.language_name
+            st.session_state.language_name,
         )
 
     with col2:
         st.metric(
             "Language Confidence",
-            f"{st.session_state.language_probability * 100:.1f}%"
+            f"{st.session_state.language_probability * 100:.1f}%",
         )
 
     st.info(
@@ -189,9 +206,9 @@ if st.session_state.stt_done:
     )
 
 
-# =========================================================
-# SHOW SEMANTIC PACKET
-# =========================================================
+# ---------------------------------------------------------
+# SEMANTIC COMPRESSION
+# ---------------------------------------------------------
 
 if st.session_state.packet is not None:
 
@@ -202,21 +219,33 @@ if st.session_state.packet is not None:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Intent", packet.intent)
+        st.metric(
+            "Intent",
+            packet.intent,
+        )
 
     with col2:
-        st.metric("Object", packet.object)
+        st.metric(
+            "Object",
+            packet.object,
+        )
 
     with col3:
-        st.metric("Location", packet.location)
+        st.metric(
+            "Location",
+            packet.location,
+        )
 
     with col4:
-        st.metric("Priority", packet.priority)
+        st.metric(
+            "Priority",
+            packet.priority,
+        )
 
 
-    # =====================================================
-    # CHANNEL SETTINGS
-    # =====================================================
+    # -----------------------------------------------------
+    # COMMUNICATION CHANNEL
+    # -----------------------------------------------------
 
     st.subheader("📡 Communication Channel")
 
@@ -225,7 +254,7 @@ if st.session_state.packet is not None:
         min_value=0,
         max_value=15,
         value=10,
-        step=1
+        step=1,
     )
 
     st.caption(
@@ -233,13 +262,13 @@ if st.session_state.packet is not None:
     )
 
 
-    # =====================================================
-    # TRANSMIT
-    # =====================================================
+    # -----------------------------------------------------
+    # TRANSMISSION
+    # -----------------------------------------------------
 
     if st.button(
         "🚀 Transmit Voice Message",
-        use_container_width=True
+        use_container_width=True,
     ):
 
         start_time = time.perf_counter()
@@ -250,18 +279,23 @@ if st.session_state.packet is not None:
 
             result = transmit_semantic_packet(
                 packet,
-                snr_db=snr_db
+                snr_db=snr_db,
             )
 
-        processing_time = time.perf_counter() - start_time
+        processing_time = (
+            time.perf_counter() - start_time
+        )
 
-        # Store result so it survives Streamlit reruns.
         st.session_state.transmission_result = result
         st.session_state.processing_time = processing_time
 
-        # Clear old reconstructed output.
         st.session_state.recovered_text = None
         st.session_state.audio_file = None
+
+
+        # -------------------------------------------------
+        # SUCCESSFUL TRANSMISSION
+        # -------------------------------------------------
 
         if result["success"]:
 
@@ -271,7 +305,14 @@ if st.session_state.packet is not None:
                 recovered_packet
             )
 
-            st.session_state.recovered_text = recovered_text
+            st.session_state.recovered_text = (
+                recovered_text
+            )
+
+
+            # ---------------------------------------------
+            # OFFLINE TTS
+            # ---------------------------------------------
 
             with st.spinner(
                 "🔊 Generating reconstructed speech..."
@@ -279,17 +320,18 @@ if st.session_state.packet is not None:
 
                 audio_file = text_to_speech(
                     recovered_text,
-                    language=recovered_packet.language
+                    language=recovered_packet.language,
                 )
 
             st.session_state.audio_file = audio_file
 
+
         st.rerun()
 
 
-# =========================================================
-# SHOW TRANSMISSION RESULTS
-# =========================================================
+# ---------------------------------------------------------
+# TRANSMISSION RESULTS
+# ---------------------------------------------------------
 
 if st.session_state.transmission_result is not None:
 
@@ -300,35 +342,39 @@ if st.session_state.transmission_result is not None:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
+
         st.metric(
             "BER",
-            f"{result['ber'] * 100:.2f}%"
+            f"{result['ber'] * 100:.2f}%",
         )
 
     with col2:
+
         st.metric(
             "CRC",
             "VALID"
             if result["crc_valid"]
-            else "INVALID"
+            else "INVALID",
         )
 
     with col3:
+
         st.metric(
             "Packet Size",
-            f"{result['packet_size']} bytes"
+            f"{result['packet_size']} bytes",
         )
 
     with col4:
+
         st.metric(
             "Processing Time",
-            f"{st.session_state.processing_time:.2f} s"
+            f"{st.session_state.processing_time:.2f} s",
         )
 
 
-    # =====================================================
+    # -----------------------------------------------------
     # FAILED TRANSMISSION
-    # =====================================================
+    # -----------------------------------------------------
 
     if not result["success"]:
 
@@ -342,9 +388,9 @@ if st.session_state.transmission_result is not None:
         )
 
 
-    # =====================================================
+    # -----------------------------------------------------
     # SUCCESSFUL TRANSMISSION
-    # =====================================================
+    # -----------------------------------------------------
 
     else:
 
@@ -355,50 +401,58 @@ if st.session_state.transmission_result is not None:
         )
 
 
-        # -------------------------------------------------
+        # ---------------------------------------------
         # RECOVERED PACKET
-        # -------------------------------------------------
+        # ---------------------------------------------
 
-        st.subheader("📦 Recovered Semantic Packet")
+        st.subheader(
+            "📦 Recovered Semantic Packet"
+        )
 
-        st.json({
-            "version": recovered_packet.version,
-            "language": recovered_packet.language,
-            "intent": recovered_packet.intent,
-            "object": recovered_packet.object,
-            "location": recovered_packet.location,
-            "priority": recovered_packet.priority,
-        })
+        st.json(
+            {
+                "version": recovered_packet.version,
+                "language": recovered_packet.language,
+                "intent": recovered_packet.intent,
+                "object": recovered_packet.object,
+                "location": recovered_packet.location,
+                "priority": recovered_packet.priority,
+            }
+        )
 
 
-        # -------------------------------------------------
+        # ---------------------------------------------
         # RECONSTRUCTED MESSAGE
-        # -------------------------------------------------
+        # ---------------------------------------------
 
-        st.subheader("🔊 Reconstructed Message")
+        st.subheader(
+            "🔊 Reconstructed Message"
+        )
 
         st.info(
             st.session_state.recovered_text
         )
 
 
-        # -------------------------------------------------
-        # AUDIO
-        # -------------------------------------------------
+        # ---------------------------------------------
+        # RECONSTRUCTED AUDIO
+        # ---------------------------------------------
 
         if st.session_state.audio_file is not None:
 
             st.audio(
                 str(st.session_state.audio_file),
-                format="audio/mp3"
+                format="audio/wav",
             )
 
 
-        # -------------------------------------------------
+        # ---------------------------------------------
         # TRANSPORT DETAILS
-        # -------------------------------------------------
+        # ---------------------------------------------
 
-        st.subheader("📡 Transport Details")
+        st.subheader(
+            "📡 Transport Details"
+        )
 
         col1, col2, col3 = st.columns(3)
 
@@ -409,7 +463,8 @@ if st.session_state.transmission_result is not None:
             )
 
             st.write(
-                f"**BER:** {result['ber'] * 100:.2f}%"
+                f"**BER:** "
+                f"{result['ber'] * 100:.2f}%"
             )
 
         with col2:
@@ -437,9 +492,9 @@ if st.session_state.transmission_result is not None:
             )
 
 
-        # -------------------------------------------------
+        # ---------------------------------------------
         # CRC DETAILS
-        # -------------------------------------------------
+        # ---------------------------------------------
 
         with st.expander("CRC Details"):
 
@@ -457,6 +512,10 @@ if st.session_state.transmission_result is not None:
                 "CRC verification: ✅ VALID"
             )
 
+
+# ---------------------------------------------------------
+# INITIAL STATE
+# ---------------------------------------------------------
 
 else:
 

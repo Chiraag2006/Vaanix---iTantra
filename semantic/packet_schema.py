@@ -9,3 +9,4 @@ class SemanticPacket:
     object: str
     location: str
     priority: str
+    message: str = ""

@@ -17,7 +17,6 @@ NUMBER_WORDS = {
     "ten": 10,
 }
 
-
 HINDI_NUMBER_WORDS = {
     "शून्य": 0,
     "एक": 1,
@@ -35,13 +34,6 @@ HINDI_NUMBER_WORDS = {
 
 
 def detect_language(text):
-    """
-    Detect Hindi or English from the text.
-
-    Devanagari characters -> Hindi
-    Otherwise -> English
-    """
-
     if re.search(r"[\u0900-\u097F]", text):
         return "hi"
 
@@ -49,57 +41,30 @@ def detect_language(text):
 
 
 def extract_location(text):
-    """
-    Extract sector number from English or Hindi text.
-    """
-
     text_lower = text.lower()
 
-    # English numeric sector
-    match = re.search(
-        r"sector\s+(\d+)",
-        text_lower
-    )
+    match = re.search(r"sector\s+(\d+)", text_lower)
 
     if match:
         return f"SECTOR_{match.group(1)}"
 
-    # English number word
     for word, number in NUMBER_WORDS.items():
-
-        if re.search(
-            rf"sector\s+{word}",
-            text_lower
-        ):
+        if re.search(rf"sector\s+{word}", text_lower):
             return f"SECTOR_{number}"
 
-    # Hindi numeric sector
-    match = re.search(
-        r"सेक्टर\s+(\d+)",
-        text
-    )
+    match = re.search(r"सेक्टर\s+(\d+)", text)
 
     if match:
         return f"SECTOR_{match.group(1)}"
 
-    # Hindi number word
     for word, number in HINDI_NUMBER_WORDS.items():
-
-        if re.search(
-            rf"सेक्टर\s+{word}",
-            text
-        ):
+        if re.search(rf"सेक्टर\s+{word}", text):
             return f"SECTOR_{number}"
 
     return "UNKNOWN"
 
 
 def extract_object(text):
-    """
-    Detect the main supply object.
-    Supports English and Hindi.
-    """
-
     text_lower = text.lower()
 
     objects = [
@@ -113,7 +78,7 @@ def extract_object(text):
                 "दवाइयाँ",
                 "दवाएं",
                 "चिकित्सा सामग्री",
-            ]
+            ],
         ),
         (
             "WATER",
@@ -122,7 +87,7 @@ def extract_object(text):
                 "water supplies",
                 "पानी",
                 "जल",
-            ]
+            ],
         ),
         (
             "FOOD",
@@ -131,14 +96,14 @@ def extract_object(text):
                 "food supplies",
                 "भोजन",
                 "खाना",
-            ]
+            ],
         ),
         (
             "FUEL",
             [
                 "fuel",
                 "ईंधन",
-            ]
+            ],
         ),
         (
             "BLOOD",
@@ -146,7 +111,7 @@ def extract_object(text):
                 "blood",
                 "रक्त",
                 "खून",
-            ]
+            ],
         ),
         (
             "EQUIPMENT",
@@ -154,14 +119,12 @@ def extract_object(text):
                 "equipment",
                 "उपकरण",
                 "सामान",
-            ]
+            ],
         ),
     ]
 
     for object_name, keywords in objects:
-
         for keyword in keywords:
-
             if keyword in text_lower:
                 return object_name
 
@@ -169,32 +132,28 @@ def extract_object(text):
 
 
 def extract_priority(text):
-    """
-    Determine message priority in English or Hindi.
-    """
-
     text_lower = text.lower()
 
     high_priority_words = [
-        # English
         "urgent",
         "urgently",
         "immediately",
         "emergency",
         "critical",
         "asap",
-
-        # Hindi
+        "help me",
+        "help",
         "तुरंत",
         "आपातकाल",
         "आपात",
         "जरूरी",
         "अत्यावश्यक",
         "तत्काल",
+        "मदद",
+        "बचाओ",
     ]
 
     for word in high_priority_words:
-
         if word in text_lower:
             return "HIGH"
 
@@ -202,13 +161,42 @@ def extract_priority(text):
 
 
 def extract_intent(text):
-    """
-    Detect message intent in English or Hindi.
-    """
-
     text_lower = text.lower()
 
-    # ALERT
+    flood_words = [
+        "flood",
+        "flooding",
+        "बाढ़",
+        "बाढ़",
+    ]
+
+    fire_words = [
+        "fire",
+        "आग",
+    ]
+
+    earthquake_words = [
+        "earthquake",
+        "भूकंप",
+        "भूकम्प",
+    ]
+
+    medical_words = [
+        "medical emergency",
+        "medical emergency",
+        "चिकित्सा आपातकाल",
+    ]
+
+    help_words = [
+        "help",
+        "help me",
+        "i need help",
+        "please help",
+        "मदद",
+        "मुझे मदद चाहिए",
+        "बचाओ",
+    ]
+
     alert_words = [
         "alert",
         "warning",
@@ -220,20 +208,12 @@ def extract_intent(text):
         "आपात",
     ]
 
-    if any(
-        phrase in text_lower
-        for phrase in alert_words
-    ):
-        return "ALERT"
-
-    # SUPPLY REQUEST
     supply_words = [
         "send",
         "deliver",
         "supply",
         "supplies",
         "provide",
-
         "भेजो",
         "भेजें",
         "भेजना",
@@ -244,29 +224,51 @@ def extract_intent(text):
         "उपलब्ध कराओ",
     ]
 
-    if any(
-        phrase in text_lower
-        for phrase in supply_words
-    ):
+    if any(word in text_lower for word in flood_words):
+        return "FLOOD_WARNING"
+
+    if any(word in text_lower for word in fire_words):
+        return "FIRE_WARNING"
+
+    if any(word in text_lower for word in earthquake_words):
+        return "EARTHQUAKE_WARNING"
+
+    if any(word in text_lower for word in medical_words):
+        return "MEDICAL_EMERGENCY"
+
+    if any(word in text_lower for word in help_words):
+        return "HELP_REQUEST"
+
+    if any(word in text_lower for word in alert_words):
+        return "ALERT"
+
+    if any(word in text_lower for word in supply_words):
         return "SUPPLY_REQUEST"
 
     return "GENERAL_MESSAGE"
 
 
 def encode_message(text):
-    """
-    Convert English or Hindi natural-language text
-    into a semantic packet.
-    """
-
     text = text.strip()
 
     language = detect_language(text)
-
     location = extract_location(text)
     object_name = extract_object(text)
     priority = extract_priority(text)
     intent = extract_intent(text)
+
+    # Preserve the original message for free/general messages.
+    message = ""
+
+    if intent in {
+        "GENERAL_MESSAGE",
+        "HELP_REQUEST",
+        "FLOOD_WARNING",
+        "FIRE_WARNING",
+        "EARTHQUAKE_WARNING",
+        "MEDICAL_EMERGENCY",
+    }:
+        message = text
 
     return SemanticPacket(
         version=1,
@@ -275,32 +277,5 @@ def encode_message(text):
         object=object_name,
         location=location,
         priority=priority,
+        message=message,
     )
-
-
-if __name__ == "__main__":
-
-    examples = [
-        "Send medical supplies to sector four immediately.",
-        "Send water supplies to sector seven immediately.",
-        "Deliver food to sector two.",
-        "Emergency fuel required at sector five.",
-
-        "सेक्टर सात में तुरंत पानी की आपूर्ति भेजो।",
-        "सेक्टर चार में तुरंत चिकित्सा सामग्री भेजें।",
-        "सेक्टर दो में भोजन भेजो।",
-        "सेक्टर पाँच में ईंधन की आपात आवश्यकता है।",
-    ]
-
-    for message in examples:
-
-        packet = encode_message(message)
-
-        print("\nMessage:")
-        print(message)
-
-        print("Language:")
-        print(packet.language)
-
-        print("Semantic packet:")
-        print(packet)
