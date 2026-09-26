@@ -3,6 +3,14 @@ from semantic.packet_schema import SemanticPacket
 
 
 def semantic_decode(packet: SemanticPacket):
+
+    """
+    Temporary semantic decoder.
+
+    This will later be replaced by the
+    actual decoder from the semantic/channel team.
+    """
+
     return (
         f"Send {packet.object.lower()} "
         f"to {packet.location.replace('_', ' ').lower()}."
@@ -16,9 +24,9 @@ def receiver(packet: SemanticPacket):
     print("Recovered message:")
     print(text)
 
-    text_to_speech(text)
+    audio_file = text_to_speech(text)
 
-    return text
+    return text, audio_file
 
 
 if __name__ == "__main__":
@@ -32,4 +40,6 @@ if __name__ == "__main__":
         priority="HIGH"
     )
 
-    receiver(packet)
+    text, audio = receiver(packet)
+
+    print(f"Audio generated: {audio}")
