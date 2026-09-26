@@ -1,57 +1,60 @@
 import numpy as np
 
-# ---------------------------------------------------------
-# 1. Input Bit Sequence
-# ---------------------------------------------------------
-bits = np.random.randint(0, 2, 10000)
-num_bits = len(bits)
+SAMPLES_PER_SYMBOL = 100
+SNR_DB = 5
 
-# ---------------------------------------------------------
-# 2. BPSK Mapping (1 -> +1, 0 -> -1)
-# ---------------------------------------------------------
-# b_n = 2*bit - 1 maps 0 to -1 and 1 to +1
-symbols = 2 * bits - 1
 
-# ---------------------------------------------------------
-# 3. Carrier Waveform Generation
-# ---------------------------------------------------------
-samples_per_symbol = 100
-t_sym = np.linspace(0, 1, samples_per_symbol, endpoint=False)
-carrier = np.cos(2 * np.pi * 1 * t_sym)  # 1 cycle per bit for illustration
+def bpsk_modulate(bits):
+    bits = np.asarray(bits, dtype=int)
 
-# Generate baseband pulse train, then modulate by carrier
-pulse_train = np.repeat(symbols, samples_per_symbol)
-full_carrier = np.tile(carrier, num_bits)
-tx_waveform = pulse_train * full_carrier
+    symbols = 2 * bits - 1
 
-# ---------------------------------------------------------
-# 4. Add Channel Noise (AWGN)-->(Additive White Gaussian Noise)
-# ---------------------------------------------------------
-noise_std = 8.0  # Adjust noise level
-noise = np.random.normal(0, noise_std, len(tx_waveform))
-rx_waveform = tx_waveform + noise
+    t = np.arange(SAMPLES_PER_SYMBOL) / SAMPLES_PER_SYMBOL
+    carrier = np.cos(2 * np.pi * t)
 
-# ---------------------------------------------------------
-# 5. BPSK Demodulator (Coherent Detection)
-# ---------------------------------------------------------
-# Correlate with carrier over each symbol interval (matched filter)
-rx_symbols = np.zeros(num_bits)
-for i in range(num_bits):
-    start = i * samples_per_symbol
-    end = (i + 1) * samples_per_symbol
-    # Multiply by the known carrier and integrate (sum)
-    rx_symbols[i] = np.sum(rx_waveform[start:end] * carrier)
+    pulse_train = np.repeat(symbols, SAMPLES_PER_SYMBOL)
+    carrier_signal = np.tile(carrier, len(bits))
 
-# Hard decision threshold at 0: r > 0 -> 1, r <= 0 -> 0
-rx_bits = (rx_symbols > 0).astype(int)
+    tx_signal = pulse_train * carrier_signal
 
-# ---------------------------------------------------------
-# 6. BER Calculation
-# ---------------------------------------------------------
-errors = np.sum(bits != rx_bits)
-ber = errors / num_bits
+    signal_power = np.mean(tx_signal ** 2)
+    snr_linear = 10 ** (SNR_DB / 10)
+    noise_power = signal_power / snr_linear
 
-print(f"Original Bits : {bits.tolist()}")
-print(f"Received Bits : {rx_bits.tolist()}")
-print(f"Bit Errors    : {errors} / {num_bits}")
-print(f"Measured BER  : {ber:.4f}")
+    noise = np.random.normal(
+        0,
+        np.sqrt(noise_power),
+        len(tx_signal)
+    )
+
+    rx_signal = tx_signal + noise
+
+    return rx_signal, carrier
+
+
+def bpsk_demodulate(rx_signal, carrier, num_bits):
+    rx_symbols = np.zeros(num_bits)
+
+    for i in range(num_bits):
+        start = i * SAMPLES_PER_SYMBOL
+        end = start + SAMPLES_PER_SYMBOL
+
+        rx_symbols[i] = np.sum(
+            rx_signal[start:end] * carrier
+        )
+
+    return (rx_symbols > 0).astype(int)
+
+
+def communication_channel(bits):
+    bits = np.asarray(bits, dtype=int)
+
+    rx_signal, carrier = bpsk_modulate(bits)
+
+    rx_bits = bpsk_demodulate(
+        rx_signal,
+        carrier,
+        len(bits)
+    )
+
+    return rx_bits
