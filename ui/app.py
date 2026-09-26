@@ -46,9 +46,37 @@ st.divider()
 
 st.header("🎤 Voice / Message Input")
 
+language = st.selectbox(
+    "Input Language",
+    options=["English", "Hindi"],
+    index=0
+)
+
+language_code = {
+    "English": "en",
+    "Hindi": "hi"
+}[language]
+
+if language_code == "en":
+
+    default_message = (
+        "Send water supplies to sector 7 immediately."
+    )
+
+else:
+
+    default_message = (
+        "सेक्टर 7 में तुरंत पानी भेजो"
+    )
+
+
 original_text = st.text_input(
     "Enter message to transmit",
-    value="Send medical supplies to sector four immediately."
+    value=default_message
+)
+
+st.info(
+    f"Input language: {language}"
 )
 
 st.info(
@@ -60,7 +88,12 @@ st.info(
 # SEMANTIC ENCODING
 # ==================================================
 
-packet = encode_message(original_text)
+packet = encode_message(
+    original_text
+)
+
+# Override language according to selected language.
+packet.language = language_code
 
 
 # ==================================================
@@ -86,7 +119,10 @@ with col2:
 with col3:
     st.metric(
         "Location",
-        packet.location.replace("_", " ")
+        packet.location.replace(
+            "_",
+            " "
+        )
     )
 
 with col4:
@@ -117,7 +153,7 @@ st.caption(
 
 
 # ==================================================
-# TRANSMISSION BUTTON
+# TRANSMISSION
 # ==================================================
 
 st.divider()
@@ -141,10 +177,16 @@ if st.button(
     ) * 1000
 
     st.session_state["demo_run"] = True
+
     st.session_state["result"] = result
+
     st.session_state["processing_time_ms"] = (
         processing_time_ms
     )
+
+    # ----------------------------------------------
+    # SUCCESS
+    # ----------------------------------------------
 
     if result["success"]:
 
@@ -158,17 +200,25 @@ if st.button(
             recovered_text
         )
 
+        # IMPORTANT:
+        # Use the recovered packet language.
         audio_file = text_to_speech(
-            recovered_text
+            recovered_text,
+            language=recovered_packet.language
         )
 
         st.session_state["audio_file"] = (
             str(audio_file)
         )
 
+    # ----------------------------------------------
+    # FAILURE
+    # ----------------------------------------------
+
     else:
 
         st.session_state["recovered_text"] = ""
+
         st.session_state["audio_file"] = ""
 
 
@@ -191,7 +241,7 @@ pipeline_steps = [
     "🔀 Deinterleaving",
     "🧬 FEC Decode",
     "✅ CRC Check",
-    "🔊 Neural TTS"
+    "🔊 Language-aware TTS"
 ]
 
 st.write(
@@ -242,6 +292,23 @@ if st.session_state.get(
 
 
         # ----------------------------------------------
+        # RECOVERED LANGUAGE
+        # ----------------------------------------------
+
+        recovered_packet = result["packet"]
+
+        recovered_language = (
+            "Hindi"
+            if recovered_packet.language == "hi"
+            else "English"
+        )
+
+        st.info(
+            f"Recovered language: {recovered_language}"
+        )
+
+
+        # ----------------------------------------------
         # RECOVERED MESSAGE
         # ----------------------------------------------
 
@@ -284,7 +351,7 @@ if st.session_state.get(
 
 
         # ==================================================
-        # CHANNEL METRICS
+        # COMMUNICATION METRICS
         # ==================================================
 
         st.subheader(
@@ -326,7 +393,7 @@ if st.session_state.get(
 
 
         # ==================================================
-        # PACKET / BIT METRICS
+        # PACKET / FEC DETAILS
         # ==================================================
 
         st.subheader(
@@ -384,14 +451,12 @@ if st.session_state.get(
 
 
         # ==================================================
-        # SEMANTIC PACKET
+        # RECOVERED SEMANTIC PACKET
         # ==================================================
 
         st.subheader(
             "🧠 Recovered Semantic Packet"
         )
-
-        recovered_packet = result["packet"]
 
         st.json({
             "version": recovered_packet.version,
@@ -415,13 +480,12 @@ if st.session_state.get(
 
         st.warning(
             "The noisy channel produced enough errors "
-            "that Hamming FEC could not completely recover "
-            "the packet, so CRC rejected it."
+            "that Hamming FEC could not completely "
+            "recover the packet, so CRC rejected it."
         )
 
-
         # ----------------------------------------------
-        # FAILURE METRICS
+        # FAILED TRANSMISSION METRICS
         # ----------------------------------------------
 
         st.subheader(
@@ -461,36 +525,7 @@ if st.session_state.get(
                 f"{processing_time_ms:.2f} ms"
             )
 
-
-        # ----------------------------------------------
-        # CRC DETAILS
-        # ----------------------------------------------
-
-        st.subheader(
-            "🔐 CRC Verification"
+        st.info(
+            "Try increasing the SNR to demonstrate "
+            "successful semantic recovery."
         )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.write(
-                f'**Received CRC:** '
-                f'{result["received_crc"]}'
-            )
-
-        with col2:
-            st.write(
-                f'**Calculated CRC:** '
-                f'{result["calculated_crc"]}'
-            )
-
-
-# ==================================================
-# FOOTER
-# ==================================================
-
-st.divider()
-
-st.caption(
-    "iTantra • VaaniX • Semantic communication prototype"
-)

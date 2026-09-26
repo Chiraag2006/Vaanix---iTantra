@@ -6,7 +6,11 @@ from FEC import (
     bits_to_bytes
 )
 from Interleaver import interleave, deinterleave
-from communication.modulation_BPSK import communication_channel
+
+from communication.modulation_BPSK import (
+    communication_channel,
+    calculate_ber
+)
 
 from semantic.packet_schema import SemanticPacket
 
@@ -16,6 +20,7 @@ def packet_to_dict(packet: SemanticPacket):
     Convert SemanticPacket into the semantic dictionary
     used by the communication protocol.
     """
+
     return {
         "version": packet.version,
         "language": packet.language,
@@ -31,6 +36,7 @@ def dict_to_packet(data):
     Convert recovered semantic dictionary back into
     a SemanticPacket.
     """
+
     return SemanticPacket(
         version=data["version"],
         language=data["language"],
@@ -41,7 +47,10 @@ def dict_to_packet(data):
     )
 
 
-def transmit_semantic_packet(packet: SemanticPacket):
+def transmit_semantic_packet(
+    packet: SemanticPacket,
+    snr_db=5
+):
     """
     Complete semantic communication chain:
 
@@ -64,33 +73,60 @@ def transmit_semantic_packet(packet: SemanticPacket):
         CRC verification
             ↓
         SemanticPacket
+
+    Parameters:
+        packet:
+            Semantic packet to transmit.
+
+        snr_db:
+            BPSK channel SNR in dB.
+
+    Returns:
+        Dictionary containing transmission,
+        recovery and channel metrics.
     """
 
-    # -------------------------
+    # ==================================================
     # SENDER
-    # -------------------------
+    # ==================================================
 
     semantic_data = packet_to_dict(packet)
 
-    payload = json_to_bytes(semantic_data)
-
-    packet_with_crc = add_crc(payload)
-
-    encoded_bits = hamming_encode_message(packet_with_crc)
-
-    interleaved_bits = interleave(encoded_bits, 7)
-
-    # -------------------------
-    # BPSK CHANNEL
-    # -------------------------
-
-    received_bits = communication_channel(
-        interleaved_bits
+    payload = json_to_bytes(
+        semantic_data
     )
 
-    # -------------------------
+    packet_with_crc = add_crc(
+        payload
+    )
+
+    encoded_bits = hamming_encode_message(
+        packet_with_crc
+    )
+
+    interleaved_bits = interleave(
+        encoded_bits,
+        7
+    )
+
+    # ==================================================
+    # BPSK CHANNEL
+    # ==================================================
+
+    received_bits = communication_channel(
+        interleaved_bits,
+        snr_db
+    )
+
+    # Calculate BER before FEC correction.
+    ber = calculate_ber(
+        interleaved_bits,
+        received_bits
+    )
+
+    # ==================================================
     # RECEIVER
-    # -------------------------
+    # ==================================================
 
     deinterleaved_bits = deinterleave(
         received_bits,
@@ -105,22 +141,53 @@ def transmit_semantic_packet(packet: SemanticPacket):
         decoded_bits
     )
 
-    valid, recovered_payload, received_crc, calculated_crc = verify_crc(
-        decoded_packet
+    valid, recovered_payload, received_crc, calculated_crc = (
+        verify_crc(decoded_packet)
     )
 
+    # ==================================================
+    # CRC FAILURE
+    # ==================================================
+
     if not valid:
+
         return {
             "success": False,
             "packet": None,
             "crc_valid": False,
-            "payload_size": len(payload),
-            "packet_size": len(packet_with_crc),
-            "fec_bits": len(encoded_bits),
-            "tx_bits": len(interleaved_bits),
+
+            "payload_size": len(
+                payload
+            ),
+
+            "packet_size": len(
+                packet_with_crc
+            ),
+
+            "fec_bits": len(
+                encoded_bits
+            ),
+
+            "tx_bits": len(
+                interleaved_bits
+            ),
+
+            "rx_bits": len(
+                received_bits
+            ),
+
+            "snr_db": snr_db,
+
+            "ber": ber,
+
             "received_crc": received_crc,
+
             "calculated_crc": calculated_crc,
         }
+
+    # ==================================================
+    # SEMANTIC RECOVERY
+    # ==================================================
 
     recovered_data = bytes_to_json(
         recovered_payload
@@ -130,14 +197,42 @@ def transmit_semantic_packet(packet: SemanticPacket):
         recovered_data
     )
 
+    # ==================================================
+    # SUCCESS
+    # ==================================================
+
     return {
         "success": True,
+
         "packet": recovered_packet,
+
         "crc_valid": True,
-        "payload_size": len(payload),
-        "packet_size": len(packet_with_crc),
-        "fec_bits": len(encoded_bits),
-        "tx_bits": len(interleaved_bits),
+
+        "payload_size": len(
+            payload
+        ),
+
+        "packet_size": len(
+            packet_with_crc
+        ),
+
+        "fec_bits": len(
+            encoded_bits
+        ),
+
+        "tx_bits": len(
+            interleaved_bits
+        ),
+
+        "rx_bits": len(
+            received_bits
+        ),
+
+        "snr_db": snr_db,
+
+        "ber": ber,
+
         "received_crc": received_crc,
+
         "calculated_crc": calculated_crc,
     }
