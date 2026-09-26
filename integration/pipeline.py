@@ -1,20 +1,16 @@
 from tts.tts_engine import text_to_speech
+from semantic.packet_schema import SemanticPacket
 
 
-def semantic_decode(packet):
-    """
-    Temporary decoder.
-    This will later be replaced by the real
-    semantic decoder from Member 2.
-    """
-
+def semantic_decode(packet: SemanticPacket):
     return (
-        f"Send {packet['object'].lower()} "
-        f"to {packet['location'].replace('_', ' ').lower()}."
+        f"Send {packet.object.lower()} "
+        f"to {packet.location.replace('_', ' ').lower()}."
     )
 
 
-def receiver(packet):
+def receiver(packet: SemanticPacket):
+
     text = semantic_decode(packet)
 
     print("Recovered message:")
@@ -27,9 +23,13 @@ def receiver(packet):
 
 if __name__ == "__main__":
 
-    packet = {
-        "object": "MEDICINE",
-        "location": "SECTOR_4"
-    }
+    packet = SemanticPacket(
+        version=1,
+        language="en",
+        intent="SUPPLY_REQUEST",
+        object="MEDICINE",
+        location="SECTOR_4",
+        priority="HIGH"
+    )
 
     receiver(packet)
