@@ -1,3 +1,4 @@
+
 import re
 
 from semantic.packet_schema import SemanticPacket
@@ -43,20 +44,24 @@ def detect_language(text):
 def extract_location(text):
     text_lower = text.lower()
 
+    # Numeric English sector
     match = re.search(r"sector\s+(\d+)", text_lower)
 
     if match:
         return f"SECTOR_{match.group(1)}"
 
+    # English number-word sector
     for word, number in NUMBER_WORDS.items():
         if re.search(rf"sector\s+{word}", text_lower):
             return f"SECTOR_{number}"
 
+    # Numeric Hindi sector
     match = re.search(r"सेक्टर\s+(\d+)", text)
 
     if match:
         return f"SECTOR_{match.group(1)}"
 
+    # Hindi number-word sector
     for word, number in HINDI_NUMBER_WORDS.items():
         if re.search(rf"सेक्टर\s+{word}", text):
             return f"SECTOR_{number}"
@@ -121,6 +126,23 @@ def extract_object(text):
                 "सामान",
             ],
         ),
+        (
+            "AMBULANCE",
+            [
+                "ambulance",
+                "ambulances",
+                "एम्बुलेंस",
+                "एम्बुलन्स",
+            ],
+        ),
+        (
+            "HOSPITAL",
+            [
+                "hospital",
+                "hospitals",
+                "अस्पताल",
+            ],
+        ),
     ]
 
     for object_name, keywords in objects:
@@ -183,7 +205,20 @@ def extract_intent(text):
 
     medical_words = [
         "medical emergency",
-        "medical emergency",
+        "medical",
+        "ambulance",
+        "hospital",
+        "doctor",
+        "patient",
+        "injured",
+        "injury",
+        "एम्बुलेंस",
+        "एम्बुलन्स",
+        "अस्पताल",
+        "डॉक्टर",
+        "मरीज",
+        "घायल",
+        "चोट",
         "चिकित्सा आपातकाल",
     ]
 
@@ -257,18 +292,13 @@ def encode_message(text):
     priority = extract_priority(text)
     intent = extract_intent(text)
 
-    # Preserve the original message for free/general messages.
-    message = ""
-
-    if intent in {
-        "GENERAL_MESSAGE",
-        "HELP_REQUEST",
-        "FLOOD_WARNING",
-        "FIRE_WARNING",
-        "EARTHQUAKE_WARNING",
-        "MEDICAL_EMERGENCY",
-    }:
-        message = text
+    # Always preserve the original message.
+    #
+    # This is important because the semantic encoder may encounter
+    # an object or phrase that is not present in our known vocabulary.
+    # Instead of losing that information, the original message is
+    # transmitted as a fallback.
+    message = text
 
     return SemanticPacket(
         version=1,
@@ -279,3 +309,4 @@ def encode_message(text):
         priority=priority,
         message=message,
     )
+
