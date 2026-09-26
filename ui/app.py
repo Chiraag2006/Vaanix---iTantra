@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import time
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -8,15 +9,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-from semantic.packet_schema import SemanticPacket
-from communication.channel_simulator import transmit
+from semantic.encoder import encode_message
+from communication.semantic_transport import transmit_semantic_packet
 from integration.pipeline import semantic_decode
 from tts.tts_engine import text_to_speech
-from evaluation.metrics import (
-    estimate_packet_size,
-    measure_latency,
-    semantic_fidelity
-)
 
 
 # --------------------------------------------------
@@ -37,6 +33,10 @@ st.set_page_config(
 st.title("📡 TANTRA")
 st.subheader("Semantic Voice Communication System")
 
+st.caption(
+    "Meaning is transmitted instead of the original speech waveform."
+)
+
 st.divider()
 
 
@@ -44,7 +44,7 @@ st.divider()
 # INPUT
 # --------------------------------------------------
 
-st.header("🎤 Voice Input")
+st.header("🎤 Voice / Message Input")
 
 original_text = st.text_input(
     "Enter message to transmit",
@@ -57,17 +57,10 @@ st.info(
 
 
 # --------------------------------------------------
-# SEMANTIC PACKET
+# SEMANTIC ENCODING
 # --------------------------------------------------
 
-packet = SemanticPacket(
-    version=1,
-    language="en",
-    intent="SUPPLY_REQUEST",
-    object="MEDICINE",
-    location="SECTOR_4",
-    priority="HIGH"
-)
+packet = encode_message(original_text)
 
 
 # --------------------------------------------------
@@ -76,7 +69,7 @@ packet = SemanticPacket(
 
 st.header("🧠 Semantic Representation")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.metric("Intent", packet.intent)
@@ -85,19 +78,29 @@ with col2:
     st.metric("Object", packet.object)
 
 with col3:
+    st.metric(
+        "Location",
+        packet.location.replace("_", " ")
+    )
+
+with col4:
     st.metric("Priority", packet.priority)
 
-st.write(
-    f"**Location:** "
-    f"{packet.location.replace('_', ' ')}"
+
+# --------------------------------------------------
+# COMMUNICATION CHANNEL
+# --------------------------------------------------
+
+st.header("📡 Communication Channel")
+
+st.metric(
+    "BPSK SNR",
+    "5 dB"
 )
 
-
-# --------------------------------------------------
-# PACKET SIZE
-# --------------------------------------------------
-
-packet_size = estimate_packet_size(packet)
+st.info(
+    "Current BPSK radio simulation uses a fixed 5 dB SNR."
+)
 
 
 # --------------------------------------------------
@@ -106,207 +109,139 @@ packet_size = estimate_packet_size(packet)
 
 st.divider()
 
-st.header("📦 Transmission")
+if st.button(
+    "🚀 Transmit Semantic Message",
+    use_container_width=True
+):
 
-col1, col2, col3 = st.columns(3)
+    start_time = time.perf_counter()
 
-with col1:
-    st.metric(
-        "Original Audio",
-        "Not measured"
+    result = transmit_semantic_packet(
+        packet
     )
 
-with col2:
-    st.metric(
-        "Semantic Packet",
-        f"{packet_size} bytes"
-    )
+    end_time = time.perf_counter()
 
-with col3:
-    st.metric(
-        "Packet Loss",
-        "0%"
-    )
+    latency_ms = (
+        end_time - start_time
+    ) * 1000
 
+    st.session_state["demo_run"] = True
+    st.session_state["result"] = result
+    st.session_state["latency_ms"] = latency_ms
 
-# --------------------------------------------------
-# CHANNEL SIMULATION
-# --------------------------------------------------
+    if result["success"]:
 
-st.header("📡 Channel Simulation")
+        recovered_packet = result["packet"]
 
-packet_loss_percent = st.slider(
-    "Packet Loss",
-    min_value=0,
-    max_value=100,
-    value=0,
-    step=1
-)
-
-corruption_percent = st.slider(
-    "Packet Corruption",
-    min_value=0,
-    max_value=100,
-    value=0,
-    step=1
-)
-
-packet_loss = packet_loss_percent / 100
-corruption_probability = corruption_percent / 100
-
-
-# --------------------------------------------------
-# PROTECTION
-# --------------------------------------------------
-
-st.subheader("🛡️ Communication Protection")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("CRC", "ON")
-
-with col2:
-    st.metric("FEC Redundancy", "3×")
-
-with col3:
-    st.metric("Interleaving", "ON")
-
-
-# --------------------------------------------------
-# RUN DEMO
-# --------------------------------------------------
-
-if st.button("🚀 Run TANTRA Demo"):
-
-    received_packet, crc_valid, fec_recovered = transmit(
-        packet,
-        packet_loss,
-        corruption_probability
-    )
-
-    if received_packet is None:
-
-        st.session_state["demo_run"] = True
-        st.session_state["packet_lost"] = True
-        st.session_state["crc_valid"] = False
-        st.session_state["fec_recovered"] = False
-
-    else:
-
-        recovered_text, latency_ms = measure_latency(
-            semantic_decode,
-            received_packet
+        recovered_text = semantic_decode(
+            recovered_packet
         )
+
+        st.session_state[
+            "recovered_text"
+        ] = recovered_text
 
         audio_file = text_to_speech(
             recovered_text
         )
 
-        fidelity = semantic_fidelity(
-            original_text,
-            recovered_text
-        )
+        st.session_state[
+            "audio_file"
+        ] = str(audio_file)
 
-        st.session_state["demo_run"] = True
-        st.session_state["packet_lost"] = False
-        st.session_state["crc_valid"] = crc_valid
-        st.session_state["fec_recovered"] = fec_recovered
-        st.session_state["recovered_text"] = recovered_text
-        st.session_state["audio_file"] = str(audio_file)
-        st.session_state["latency_ms"] = latency_ms
-        st.session_state["fidelity"] = fidelity
+    else:
+
+        st.session_state[
+            "recovered_text"
+        ] = ""
+
+        st.session_state[
+            "audio_file"
+        ] = ""
 
 
 # --------------------------------------------------
-# PIPELINE STATUS
+# PIPELINE
 # --------------------------------------------------
 
 st.divider()
 
-st.header("🔄 TANTRA Pipeline")
+st.header("🔄 Communication Pipeline")
 
 pipeline_steps = [
     "🎤 Input",
     "🧠 Semantic Encoding",
-    "🛡️ FEC + CRC",
-    "📡 Channel",
-    "📥 Recovery",
+    "📦 Packetisation",
+    "🛡️ CRC",
+    "🧬 Hamming FEC",
+    "🔀 Interleaving",
+    "📡 BPSK + AWGN",
+    "🔀 Deinterleaving",
+    "🧬 FEC Decode",
+    "✅ CRC Check",
     "🔊 Neural TTS"
 ]
 
-st.write(" → ".join(pipeline_steps))
+st.write(
+    " → ".join(pipeline_steps)
+)
 
 
 # --------------------------------------------------
 # RECEIVER
 # --------------------------------------------------
 
-st.divider()
+if st.session_state.get(
+    "demo_run",
+    False
+):
 
-st.header("📥 Receiver")
+    result = st.session_state[
+        "result"
+    ]
 
-if st.session_state.get("demo_run", False):
+    st.divider()
 
-    if st.session_state.get("packet_lost", False):
+    st.header("📥 Receiver")
 
-        st.error(
-            "🔴 Packet could not be recovered."
+    if result["success"]:
+
+        st.success(
+            "✅ Semantic packet successfully recovered"
         )
 
-        st.warning(
-            "All redundant copies were lost "
-            "or failed CRC verification."
-        )
+        # ------------------------------------------
+        # STATUS
+        # ------------------------------------------
 
-    else:
-
-        crc_valid = st.session_state.get(
-            "crc_valid",
-            False
-        )
-
-        fec_recovered = st.session_state.get(
-            "fec_recovered",
-            False
-        )
-
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
-
-            if crc_valid:
-                st.success(
-                    "🟢 CRC CHECK PASSED"
-                )
-            else:
-                st.error(
-                    "🔴 CRC CHECK FAILED"
-                )
+            st.success("CRC VALID")
 
         with col2:
+            st.success("HAMMING FEC RECOVERED")
 
-            if fec_recovered:
-                st.success(
-                    "🟢 FEC RECOVERY SUCCESS"
-                )
-            else:
-                st.info(
-                    "ℹ️ Direct packet received"
-                )
+        with col3:
+            st.success("BPSK LINK OK")
 
+        # ------------------------------------------
+        # RECOVERED MESSAGE
+        # ------------------------------------------
 
         recovered_text = st.session_state.get(
             "recovered_text",
             ""
         )
 
-        st.subheader("Recovered Message")
+        st.subheader(
+            "Recovered Message"
+        )
 
         st.success(
             recovered_text
         )
-
 
         # ------------------------------------------
         # AUDIO
@@ -317,70 +252,124 @@ if st.session_state.get("demo_run", False):
             ""
         )
 
-        st.write(
-            "🔊 Reconstructed speech:"
-        )
+        if (
+            audio_file
+            and Path(audio_file).exists()
+        ):
 
-        if Path(audio_file).exists():
+            st.subheader(
+                "🔊 Reconstructed Speech"
+            )
 
             st.audio(
                 audio_file,
                 format="audio/mp3"
             )
 
-        else:
-
-            st.error(
-                f"Audio file was not found:\n"
-                f"{audio_file}"
-            )
-
-
         # ------------------------------------------
-        # EVALUATION
+        # METRICS
         # ------------------------------------------
 
-        st.subheader("📊 Evaluation")
+        st.subheader(
+            "📊 Transmission Metrics"
+        )
 
         latency_ms = st.session_state.get(
             "latency_ms",
             0
         )
 
-        fidelity = st.session_state.get(
-            "fidelity",
-            0
-        )
-
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
+
             st.metric(
-                "Packet Size",
-                f"{packet_size} bytes"
+                "Semantic Payload",
+                f'{result["payload_size"]} bytes'
             )
 
         with col2:
+
             st.metric(
-                "Packet Loss",
-                f"{packet_loss_percent}%"
+                "Packet + CRC",
+                f'{result["packet_size"]} bytes'
             )
 
         with col3:
+
             st.metric(
-                "Latency",
-                f"{latency_ms:.2f} ms"
+                "Transmitted Bits",
+                result["tx_bits"]
             )
 
         with col4:
+
             st.metric(
-                "Semantic Fidelity",
-                f"{fidelity * 100:.0f}%"
+                "Processing Time",
+                f"{latency_ms:.2f} ms"
             )
 
-else:
+        # ------------------------------------------
+        # CRC
+        # ------------------------------------------
 
-    st.info(
-        "Enter a message and press "
-        "'Run TANTRA Demo' to start."
-    )
+        st.subheader(
+            "🔐 CRC Verification"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            st.write(
+                f'**Received CRC:** '
+                f'{result["received_crc"]}'
+            )
+
+        with col2:
+
+            st.write(
+                f'**Calculated CRC:** '
+                f'{result["calculated_crc"]}'
+            )
+
+        # ------------------------------------------
+        # RADIO
+        # ------------------------------------------
+
+        st.subheader(
+            "📡 Radio Details"
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+
+            st.metric(
+                "FEC Bits",
+                result["fec_bits"]
+            )
+
+        with col2:
+
+            st.metric(
+                "TX Bits",
+                result["tx_bits"]
+            )
+
+        with col3:
+
+            st.metric(
+                "Modulation",
+                "BPSK"
+            )
+
+    else:
+
+        st.error(
+            "❌ Transmission failed."
+        )
+
+        st.warning(
+            "CRC validation failed at the receiver."
+        )
