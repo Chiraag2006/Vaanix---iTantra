@@ -15,9 +15,9 @@ from integration.pipeline import semantic_decode
 from tts.tts_engine import text_to_speech
 
 
-# --------------------------------------------------
+# ==================================================
 # PAGE CONFIGURATION
-# --------------------------------------------------
+# ==================================================
 
 st.set_page_config(
     page_title="TANTRA",
@@ -26,9 +26,9 @@ st.set_page_config(
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # HEADER
-# --------------------------------------------------
+# ==================================================
 
 st.title("📡 TANTRA")
 st.subheader("Semantic Voice Communication System")
@@ -40,9 +40,9 @@ st.caption(
 st.divider()
 
 
-# --------------------------------------------------
+# ==================================================
 # INPUT
-# --------------------------------------------------
+# ==================================================
 
 st.header("🎤 Voice / Message Input")
 
@@ -56,26 +56,32 @@ st.info(
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # SEMANTIC ENCODING
-# --------------------------------------------------
+# ==================================================
 
 packet = encode_message(original_text)
 
 
-# --------------------------------------------------
+# ==================================================
 # SEMANTIC REPRESENTATION
-# --------------------------------------------------
+# ==================================================
 
 st.header("🧠 Semantic Representation")
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.metric("Intent", packet.intent)
+    st.metric(
+        "Intent",
+        packet.intent
+    )
 
 with col2:
-    st.metric("Object", packet.object)
+    st.metric(
+        "Object",
+        packet.object
+    )
 
 with col3:
     st.metric(
@@ -84,28 +90,35 @@ with col3:
     )
 
 with col4:
-    st.metric("Priority", packet.priority)
+    st.metric(
+        "Priority",
+        packet.priority
+    )
 
 
-# --------------------------------------------------
+# ==================================================
 # COMMUNICATION CHANNEL
-# --------------------------------------------------
+# ==================================================
 
 st.header("📡 Communication Channel")
 
-st.metric(
-    "BPSK SNR",
-    "5 dB"
+snr_db = st.slider(
+    "BPSK Channel SNR (dB)",
+    min_value=0,
+    max_value=15,
+    value=8,
+    step=1
 )
 
-st.info(
-    "Current BPSK radio simulation uses a fixed 5 dB SNR."
+st.caption(
+    "Lower SNR increases channel errors. "
+    "Higher SNR improves reliable semantic recovery."
 )
 
 
-# --------------------------------------------------
-# TRANSMISSION
-# --------------------------------------------------
+# ==================================================
+# TRANSMISSION BUTTON
+# ==================================================
 
 st.divider()
 
@@ -117,18 +130,21 @@ if st.button(
     start_time = time.perf_counter()
 
     result = transmit_semantic_packet(
-        packet
+        packet,
+        snr_db=snr_db
     )
 
     end_time = time.perf_counter()
 
-    latency_ms = (
+    processing_time_ms = (
         end_time - start_time
     ) * 1000
 
     st.session_state["demo_run"] = True
     st.session_state["result"] = result
-    st.session_state["latency_ms"] = latency_ms
+    st.session_state["processing_time_ms"] = (
+        processing_time_ms
+    )
 
     if result["success"]:
 
@@ -138,32 +154,27 @@ if st.button(
             recovered_packet
         )
 
-        st.session_state[
-            "recovered_text"
-        ] = recovered_text
+        st.session_state["recovered_text"] = (
+            recovered_text
+        )
 
         audio_file = text_to_speech(
             recovered_text
         )
 
-        st.session_state[
-            "audio_file"
-        ] = str(audio_file)
+        st.session_state["audio_file"] = (
+            str(audio_file)
+        )
 
     else:
 
-        st.session_state[
-            "recovered_text"
-        ] = ""
-
-        st.session_state[
-            "audio_file"
-        ] = ""
+        st.session_state["recovered_text"] = ""
+        st.session_state["audio_file"] = ""
 
 
-# --------------------------------------------------
-# PIPELINE
-# --------------------------------------------------
+# ==================================================
+# COMMUNICATION PIPELINE
+# ==================================================
 
 st.divider()
 
@@ -188,22 +199,25 @@ st.write(
 )
 
 
-# --------------------------------------------------
+# ==================================================
 # RECEIVER
-# --------------------------------------------------
+# ==================================================
 
 if st.session_state.get(
     "demo_run",
     False
 ):
 
-    result = st.session_state[
-        "result"
-    ]
+    result = st.session_state["result"]
 
     st.divider()
 
     st.header("📥 Receiver")
+
+
+    # ==================================================
+    # SUCCESS
+    # ==================================================
 
     if result["success"]:
 
@@ -211,9 +225,9 @@ if st.session_state.get(
             "✅ Semantic packet successfully recovered"
         )
 
-        # ------------------------------------------
+        # ----------------------------------------------
         # STATUS
-        # ------------------------------------------
+        # ----------------------------------------------
 
         col1, col2, col3 = st.columns(3)
 
@@ -226,9 +240,10 @@ if st.session_state.get(
         with col3:
             st.success("BPSK LINK OK")
 
-        # ------------------------------------------
+
+        # ----------------------------------------------
         # RECOVERED MESSAGE
-        # ------------------------------------------
+        # ----------------------------------------------
 
         recovered_text = st.session_state.get(
             "recovered_text",
@@ -243,9 +258,10 @@ if st.session_state.get(
             recovered_text
         )
 
-        # ------------------------------------------
-        # AUDIO
-        # ------------------------------------------
+
+        # ----------------------------------------------
+        # RECONSTRUCTED SPEECH
+        # ----------------------------------------------
 
         audio_file = st.session_state.get(
             "audio_file",
@@ -266,52 +282,87 @@ if st.session_state.get(
                 format="audio/mp3"
             )
 
-        # ------------------------------------------
-        # METRICS
-        # ------------------------------------------
+
+        # ==================================================
+        # CHANNEL METRICS
+        # ==================================================
 
         st.subheader(
-            "📊 Transmission Metrics"
+            "📊 Communication Metrics"
         )
 
-        latency_ms = st.session_state.get(
-            "latency_ms",
-            0
+        processing_time_ms = (
+            st.session_state.get(
+                "processing_time_ms",
+                0
+            )
         )
 
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
+            st.metric(
+                "SNR",
+                f'{result["snr_db"]} dB'
+            )
 
+        with col2:
+            st.metric(
+                "Raw BER",
+                f'{result["ber"] * 100:.2f}%'
+            )
+
+        with col3:
             st.metric(
                 "Semantic Payload",
                 f'{result["payload_size"]} bytes'
             )
 
-        with col2:
+        with col4:
+            st.metric(
+                "Processing Time",
+                f"{processing_time_ms:.2f} ms"
+            )
 
+
+        # ==================================================
+        # PACKET / BIT METRICS
+        # ==================================================
+
+        st.subheader(
+            "📦 Packet & FEC Details"
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
             st.metric(
                 "Packet + CRC",
                 f'{result["packet_size"]} bytes'
             )
 
-        with col3:
-
+        with col2:
             st.metric(
-                "Transmitted Bits",
+                "FEC Bits",
+                result["fec_bits"]
+            )
+
+        with col3:
+            st.metric(
+                "TX Bits",
                 result["tx_bits"]
             )
 
         with col4:
-
             st.metric(
-                "Processing Time",
-                f"{latency_ms:.2f} ms"
+                "RX Bits",
+                result["rx_bits"]
             )
 
-        # ------------------------------------------
-        # CRC
-        # ------------------------------------------
+
+        # ==================================================
+        # CRC VERIFICATION
+        # ==================================================
 
         st.subheader(
             "🔐 CRC Verification"
@@ -320,56 +371,126 @@ if st.session_state.get(
         col1, col2 = st.columns(2)
 
         with col1:
-
             st.write(
                 f'**Received CRC:** '
                 f'{result["received_crc"]}'
             )
 
         with col2:
-
             st.write(
                 f'**Calculated CRC:** '
                 f'{result["calculated_crc"]}'
             )
 
-        # ------------------------------------------
-        # RADIO
-        # ------------------------------------------
+
+        # ==================================================
+        # SEMANTIC PACKET
+        # ==================================================
 
         st.subheader(
-            "📡 Radio Details"
+            "🧠 Recovered Semantic Packet"
         )
 
-        col1, col2, col3 = st.columns(3)
+        recovered_packet = result["packet"]
 
-        with col1:
+        st.json({
+            "version": recovered_packet.version,
+            "language": recovered_packet.language,
+            "intent": recovered_packet.intent,
+            "object": recovered_packet.object,
+            "location": recovered_packet.location,
+            "priority": recovered_packet.priority
+        })
 
-            st.metric(
-                "FEC Bits",
-                result["fec_bits"]
-            )
 
-        with col2:
-
-            st.metric(
-                "TX Bits",
-                result["tx_bits"]
-            )
-
-        with col3:
-
-            st.metric(
-                "Modulation",
-                "BPSK"
-            )
+    # ==================================================
+    # FAILURE
+    # ==================================================
 
     else:
 
         st.error(
-            "❌ Transmission failed."
+            "❌ Semantic packet could not be recovered."
         )
 
         st.warning(
-            "CRC validation failed at the receiver."
+            "The noisy channel produced enough errors "
+            "that Hamming FEC could not completely recover "
+            "the packet, so CRC rejected it."
         )
+
+
+        # ----------------------------------------------
+        # FAILURE METRICS
+        # ----------------------------------------------
+
+        st.subheader(
+            "📊 Failed Transmission Metrics"
+        )
+
+        processing_time_ms = (
+            st.session_state.get(
+                "processing_time_ms",
+                0
+            )
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "SNR",
+                f'{result["snr_db"]} dB'
+            )
+
+        with col2:
+            st.metric(
+                "Raw BER",
+                f'{result["ber"] * 100:.2f}%'
+            )
+
+        with col3:
+            st.metric(
+                "Packet Size",
+                f'{result["packet_size"]} bytes'
+            )
+
+        with col4:
+            st.metric(
+                "Processing Time",
+                f"{processing_time_ms:.2f} ms"
+            )
+
+
+        # ----------------------------------------------
+        # CRC DETAILS
+        # ----------------------------------------------
+
+        st.subheader(
+            "🔐 CRC Verification"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.write(
+                f'**Received CRC:** '
+                f'{result["received_crc"]}'
+            )
+
+        with col2:
+            st.write(
+                f'**Calculated CRC:** '
+                f'{result["calculated_crc"]}'
+            )
+
+
+# ==================================================
+# FOOTER
+# ==================================================
+
+st.divider()
+
+st.caption(
+    "iTantra • VaaniX • Semantic communication prototype"
+)
